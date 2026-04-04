@@ -10,7 +10,19 @@ dependencies = [
     "Pillow>=10.0.0",
     "numpy>=1.24.0",
     "rapidocr-onnxruntime>=1.3.0",
-    "onnxruntime>=1.16.0",
+    # GPU: onnxruntime-gpu. CPU-only release: use "onnxruntime" instead. 发 CPU 包时可改 onnxruntime。
+    #
+    # One PyPI wheel is built for ONE CUDA generation (ORT 11.8 build ↔ CUDA 11.x; ORT 12.x build ↔ CUDA 12.x).
+    # You cannot satisfy both 11.x and 12.x toolkits with a single version pin — pick one primary audience.
+    # 单个 wheel 只对应一代 CUDA；无法用一个版本号同时覆盖 11 与 12，需按目标环境选线或让用户覆盖依赖。
+    #
+    # Default line: 1.20.x targets CUDA 12.x (PyPI default since ORT 1.19), lighter than 1.24.x; supports cp313.
+    # 默认 1.20.x：面向 CUDA 12.x，比 1.24 略旧、略易与多种 12.x 运行库共存；支持 Python 3.13。
+    #
+    # CUDA 11.8 toolkits only: use Python 3.12 or lower and override, e.g.
+    #   uv pip install "onnxruntime-gpu>=1.18.1,<1.19"
+    # (1.18.x has no cp313 wheels on PyPI.) 仅 CUDA 11.8：需 Python≤3.12 并手动装 1.18.x。
+    "onnxruntime-gpu>=1.20.0,<1.21.0",
     "deep-translator>=1.11.4",
 ]
 
