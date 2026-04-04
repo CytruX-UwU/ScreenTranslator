@@ -22,6 +22,7 @@ from screen_translator.config import (
     TRANSLATE_BATCH_DELIM,
     TRANSLATE_BATCH_MAX_CHARS,
 )
+from screen_translator.ui_result import OVERLAY_TRANSLATION_BG_RGBA
 from screen_translator.ocr_utils import box_to_xyxy, has_cjk, iter_ocr_items
 from screen_translator.ort_ep import resolve_ocr_ep_flags
 from screen_translator.render import fit_font_for_box
@@ -212,7 +213,7 @@ class Pipeline:
                 for i, (box, _) in enumerate(entries):
                     en = ens[i]
                     x1, y1, x2, y2 = box_to_xyxy(box)
-                    draw_o.rectangle([x1, y1, x2, y2], fill=(15, 18, 24, 175))
+                    draw_o.rectangle([x1, y1, x2, y2], fill=OVERLAY_TRANSLATION_BG_RGBA)
                     kept.append(((x1, y1, x2, y2), en))
                 logger.info(
                     "Translation finished in %.1f ms (%d string(s), %d HTTP request(s) for %d CJK string(s); "
@@ -246,6 +247,10 @@ _pipeline: Optional[Pipeline] = None
 _pipeline_lock = threading.Lock()
 _ocr_task_lock = threading.Lock()
 
+# Queued before annotate() so the UI can show “processing” during translation + overlay draw.
+# 在 annotate（翻译与绘制）之前入队，供 UI 显示处理中。
+RESULT_EVENT_PROCESSING = object()
+
 
 def get_pipeline() -> Pipeline:
     global _pipeline
@@ -257,7 +262,8 @@ def get_pipeline() -> Pipeline:
 
 
 def process_and_show(
-    capture: Callable[[], Image.Image], result_queue: "queue.Queue[Optional[Image.Image]]"
+    capture: Callable[[], Image.Image],
+    result_queue: "queue.Queue[Optional[object]]",
 ) -> None:
     def work() -> None:
         with _ocr_task_lock:
@@ -280,6 +286,7 @@ def process_and_show(
                 items = pipe.run_ocr(img)
                 if not items:
                     logger.info("No text detected after OCR.")
+                result_queue.put(RESULT_EVENT_PROCESSING)
                 out = pipe.annotate(img, items)
             except Exception as e:
                 logger.exception("Processing failed: %s", e)

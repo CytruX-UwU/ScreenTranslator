@@ -11,18 +11,16 @@ from __future__ import annotations
 import logging
 import queue
 import sys
-from typing import Optional
-
 import tkinter as tk
 from PIL import Image
 
 from screen_translator.capture import grab_region, grab_virtual_screen
 from screen_translator.config import HOTKEY_FULL, HOTKEY_REGION
 from screen_translator.hotkeys import GlobalHotKeys
-from screen_translator.pipeline import process_and_show
+from screen_translator.pipeline import RESULT_EVENT_PROCESSING, process_and_show
 from screen_translator.tray import start_tray
 from screen_translator.ui_region import region_selector
-from screen_translator.ui_result import show_result
+from screen_translator.ui_result import close_result_window, open_result_pending, show_result_image
 
 
 def _startup_messages(hotkeys: GlobalHotKeys) -> None:
@@ -49,7 +47,7 @@ def main() -> None:
     )
 
     event_q: queue.Queue = queue.Queue()
-    result_q: queue.Queue[Optional[Image.Image]] = queue.Queue()
+    result_q: queue.Queue = queue.Queue()  # None | RESULT_EVENT_PROCESSING | PIL.Image
 
     def on_full() -> None:
         event_q.put("full")
@@ -74,9 +72,13 @@ def main() -> None:
     def pump() -> None:
         try:
             while True:
-                done = result_q.get_nowait()
-                if done is not None:
-                    show_result(root, done)
+                item = result_q.get_nowait()
+                if item is None:
+                    close_result_window()
+                elif item is RESULT_EVENT_PROCESSING:
+                    open_result_pending(root)
+                else:
+                    show_result_image(root, item)
         except queue.Empty:
             pass
 
