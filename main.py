@@ -1,10 +1,14 @@
 """
 入口：全局快捷键 → 截图 / 框选 → OCR 与翻译流水线 → 结果展示。
+
+无控制台运行时（如 pythonw、PyInstaller --noconsole）：仍可使用热键；若需看提示请用
+python.exe 从终端启动，或自行加日志/托盘。
 """
 
 from __future__ import annotations
 
 import queue
+import sys
 from typing import Optional
 
 import tkinter as tk
@@ -12,14 +16,30 @@ from PIL import Image
 
 from screen_translator.capture import grab_region, grab_virtual_screen
 from screen_translator.config import HOTKEY_FULL, HOTKEY_REGION
+from screen_translator.hotkeys import GlobalHotKeys
 from screen_translator.pipeline import process_and_show
 from screen_translator.ui_region import region_selector
 from screen_translator.ui_result import show_result
 
 
-def main() -> None:
-    from pynput import keyboard
+def _startup_messages(hotkeys: GlobalHotKeys) -> None:
+    if sys.stdout is None:
+        return
+    lines = [
+        "屏幕翻译已在后台运行。",
+        f"  {HOTKEY_FULL} — 截取整个虚拟桌面并翻译",
+        f"  {HOTKEY_REGION} — 框选区域后翻译（拖拽选区，Esc 取消）",
+        f"热键后端: {hotkeys.backend}（win32=系统注册，pynput=兼容回退）",
+        "关闭此终端或 Ctrl+C 结束进程。",
+    ]
+    try:
+        for line in lines:
+            print(line, flush=True)
+    except OSError:
+        pass
 
+
+def main() -> None:
     event_q: queue.Queue = queue.Queue()
     result_q: queue.Queue[Optional[Image.Image]] = queue.Queue()
 
@@ -29,19 +49,14 @@ def main() -> None:
     def on_region() -> None:
         event_q.put("region")
 
-    hotkeys = keyboard.GlobalHotKeys(
+    hotkeys = GlobalHotKeys(
         {
             HOTKEY_FULL: on_full,
             HOTKEY_REGION: on_region,
         }
     )
-
-    print("屏幕翻译已在后台运行。")
-    print(f"  {HOTKEY_FULL} — 截取整个虚拟桌面并翻译")
-    print(f"  {HOTKEY_REGION} — 框选区域后翻译（拖拽选区，Esc 取消）")
-    print("关闭此终端或 Ctrl+C 结束进程。")
-
     hotkeys.start()
+    _startup_messages(hotkeys)
 
     root = tk.Tk()
     root.withdraw()
