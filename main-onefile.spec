@@ -5,15 +5,18 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 _pystray_datas, _pystray_binaries, _pystray_hiddenimports = collect_all('pystray')
 _ort_datas, _ort_binaries, _ort_hiddenimports = collect_all('onnxruntime')
+_rapid_datas, _rapid_binaries, _rapid_hiddenimports = collect_all('rapidocr_onnxruntime')
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=_pystray_binaries + _ort_binaries,
-    datas=_pystray_datas + _ort_datas,
+    binaries=_pystray_binaries + _ort_binaries + _rapid_binaries,
+    datas=_pystray_datas + _ort_datas + _rapid_datas,
     hiddenimports=_pystray_hiddenimports
     + _ort_hiddenimports
-    + collect_submodules('screen_translator'),
+    + _rapid_hiddenimports
+    + collect_submodules('screen_translator')
+    + collect_submodules('rapidocr_onnxruntime'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
