@@ -1,6 +1,7 @@
 """
-全局快捷键：Windows 下优先使用 RegisterHotKey + 消息循环（控制台 / IDE / 打包 exe 下比
-WH_KEYBOARD_LL 钩子更稳定）；失败或非 Windows 时回退到 pynput。
+Global hotkeys: on Windows prefer RegisterHotKey + message loop (more stable than
+WH_KEYBOARD_LL in console/IDE/packaged exe); else fall back to pynput.
+全局快捷键：Windows 下优先 RegisterHotKey + 消息循环；失败或非 Windows 时用 pynput。
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from typing import Callable, Optional
 
 from screen_translator.config import HOTKEY_FULL, HOTKEY_REGION
 
-# 与 config 中 Ctrl+Shift+1 / 2 一致（RegisterHotKey）
+# Must match config (Ctrl+Shift+1/2). 与 config 中 Ctrl+Shift+1/2 一致（RegisterHotKey）。
 _MOD_CTRL_SHIFT = 0x0002 | 0x0004
 _VK_1 = 0x31
 _VK_2 = 0x32
@@ -37,7 +38,7 @@ class _MSG(ctypes.Structure):
 
 
 class GlobalHotKeys:
-    """接口与 pynput.keyboard.GlobalHotKeys 相近：start() / stop()。"""
+    """Same role as pynput.keyboard.GlobalHotKeys: start() / stop(). 接口与 pynput GlobalHotKeys 相近。"""
 
     def __init__(
         self,

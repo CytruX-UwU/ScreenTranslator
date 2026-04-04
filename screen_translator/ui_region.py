@@ -1,4 +1,4 @@
-"""全屏半透明框选区域。"""
+"""Fullscreen semi-transparent region selection. 全屏半透明框选区域。"""
 
 from typing import Optional, Tuple
 
@@ -7,7 +7,10 @@ import tkinter as tk
 
 
 def region_selector(master: tk.Tk) -> Optional[Tuple[int, int, int, int]]:
-    """在主线程调用。返回 (left, top, width, height) 屏幕坐标，或取消时 None。"""
+    """
+    Must run on the tk main thread. Returns (left, top, width, height) or None if cancelled.
+    在主线程调用。返回 (left, top, width, height) 屏幕坐标，取消时为 None。
+    """
     with mss.mss() as sct:
         mon = sct.monitors[0]
     mon_left, mon_top, w, h = mon["left"], mon["top"], mon["width"], mon["height"]

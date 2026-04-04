@@ -1,4 +1,4 @@
-"""OCR + 翻译 + 标注流水线与后台任务调度。"""
+"""OCR, translation, overlay rendering, and background job scheduling. OCR、翻译、叠加绘制与后台任务调度。"""
 
 import queue
 import threading
@@ -84,7 +84,7 @@ def get_pipeline() -> Pipeline:
     global _pipeline
     with _pipeline_lock:
         if _pipeline is None:
-            print("正在加载 OCR 模型（首次运行会下载模型，请稍候）…", flush=True)
+            print("Loading OCR model (first run may download files)…", flush=True)
             _pipeline = Pipeline.create()
         return _pipeline
 
@@ -97,17 +97,17 @@ def process_and_show(
             try:
                 img = capture()
             except Exception as e:
-                print(f"截图失败: {e}", flush=True)
+                print(f"Capture failed: {e}", flush=True)
                 result_queue.put(None)
                 return
             try:
                 pipe = get_pipeline()
                 items = pipe.run_ocr(img)
                 if not items:
-                    print("未检测到文字。", flush=True)
+                    print("No text detected.", flush=True)
                 out = pipe.annotate(img, items)
             except Exception as e:
-                print(f"处理失败: {e}", flush=True)
+                print(f"Processing failed: {e}", flush=True)
                 result_queue.put(None)
                 return
             result_queue.put(out)

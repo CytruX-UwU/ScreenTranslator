@@ -1,4 +1,4 @@
-"""OCR 输出解析与几何工具。"""
+"""Normalize OCR outputs and box geometry helpers. 统一 OCR 输出格式与框几何工具。"""
 
 import re
 from typing import Any, List, Tuple
@@ -11,7 +11,10 @@ def has_cjk(s: str) -> bool:
 
 
 def iter_ocr_items(ocr_out: Any) -> List[Tuple[Any, str, float]]:
-    """将 RapidOCR 不同版本的返回值统一为 [(box, text, score), ...]。"""
+    """
+    Normalize RapidOCR return values to [(box, text, score), ...].
+    将 RapidOCR 不同版本的返回值统一为 [(box, text, score), ...]。
+    """
     items: List[Tuple[Any, str, float]] = []
 
     if ocr_out is None:

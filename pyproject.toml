@@ -1,7 +1,7 @@
 [project]
 name = "screen-translator"
 version = "0.1.0"
-description = "屏幕区域 OCR 与翻译工具"
+description = "Screen region OCR and Chinese-to-English translation. 屏幕区域 OCR 与中译英。"
 requires-python = ">=3.10"
 dependencies = [
     "mss>=9.0.0",

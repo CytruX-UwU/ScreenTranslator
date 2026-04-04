@@ -1,4 +1,4 @@
-"""全屏展示翻译结果图。"""
+"""Fullscreen display of the translated overlay image. 全屏展示带翻译叠加层的结果图。"""
 
 import io
 from typing import Any
@@ -9,7 +9,7 @@ from PIL import Image, ImageTk
 
 def show_result(master: tk.Tk, pil_image: Image.Image) -> None:
     top = tk.Toplevel(master)
-    top.title("Screen Translator — Esc 关闭")
+    top.title("Screen Translator — press Esc to close")
     top.attributes("-topmost", True)
     top.attributes("-fullscreen", True)
     top.configure(bg="black")
@@ -29,12 +29,12 @@ def show_result(master: tk.Tk, pil_image: Image.Image) -> None:
     photo = ImageTk.PhotoImage(data=bio.read())
 
     lbl = tk.Label(top, image=photo, bg="black")
-    lbl.image = photo  # noqa: keep ref
+    lbl.image = photo  # noqa: keep ref — prevent GC / 防止被回收
     lbl.pack(expand=True)
 
     hint = tk.Label(
         top,
-        text="按 Esc 或单击关闭",
+        text="Press Esc or click to close",
         fg="#cccccc",
         bg="black",
         font=("Segoe UI", 12),

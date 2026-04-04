@@ -1,4 +1,4 @@
-"""图像内字体选择与排版（供 Pipeline 标注使用）。"""
+"""Font selection and fitting for overlay labels in Pipeline. Pipeline 叠加文字用的字体选择与适配。"""
 
 from typing import Any, Tuple
 

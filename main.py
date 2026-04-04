@@ -1,8 +1,9 @@
 """
-入口：全局快捷键 → 截图 / 框选 → OCR 与翻译流水线 → 结果展示；系统托盘常驻。
+Entry: global hotkeys, capture / region, OCR and translation, result view, tray.
+入口：全局快捷键、截图/选区、OCR 与翻译、结果展示、托盘。
 
-打包建议（PyInstaller）：对无窗程序使用 --windowed/--noconsole，并视情况
---collect-all pystray，避免托盘资源遗漏。详见项目说明或下方注释。
+PyInstaller: prefer --windowed/--noconsole; use --collect-all pystray if tray assets are missing.
+打包：无控制台用 --windowed/--noconsole；托盘资源缺失时可加 --collect-all pystray。
 """
 
 from __future__ import annotations
@@ -27,11 +28,11 @@ def _startup_messages(hotkeys: GlobalHotKeys) -> None:
     if sys.stdout is None:
         return
     lines = [
-        "屏幕翻译已在后台运行（托盘图标可退出）。",
-        f"  {HOTKEY_FULL} — 截取整个虚拟桌面并翻译",
-        f"  {HOTKEY_REGION} — 框选区域后翻译（拖拽选区，Esc 取消）",
-        f"热键后端: {hotkeys.backend}（win32=系统注册，pynput=兼容回退）",
-        "关闭此终端、Ctrl+C 或托盘「退出」结束进程。",
+        "Screen Translator is running in the background (use the tray icon to exit).",
+        f"  {HOTKEY_FULL} — capture the full virtual desktop and translate",
+        f"  {HOTKEY_REGION} — drag a region, then translate (Esc cancels)",
+        f"Hotkey backend: {hotkeys.backend} (win32=native RegisterHotKey, pynput=fallback)",
+        "Exit: close this terminal, Ctrl+C, or tray Exit.",
     ]
     try:
         for line in lines:

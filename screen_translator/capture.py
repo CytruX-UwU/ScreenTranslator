@@ -1,4 +1,4 @@
-"""屏幕截图（虚拟桌面与矩形区域）。"""
+"""Screen capture: virtual desktop and rectangular region. 屏幕截图（虚拟桌面与矩形区域）。"""
 
 from typing import Dict, Tuple
 
