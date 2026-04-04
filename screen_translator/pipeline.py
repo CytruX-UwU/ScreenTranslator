@@ -19,12 +19,50 @@ from screen_translator.config import (
     OCR_USE_CLS,
     OCR_USE_CUDA,
     OCR_USE_DML,
+    TRANSLATE_BATCH_DELIM,
+    TRANSLATE_BATCH_MAX_CHARS,
 )
 from screen_translator.ocr_utils import box_to_xyxy, has_cjk, iter_ocr_items
 from screen_translator.ort_ep import resolve_ocr_ep_flags
 from screen_translator.render import fit_font_for_box
 
 logger = logging.getLogger(__name__)
+
+
+def _pack_cjk_texts_into_batches(
+    texts: List[str], max_chars: int, delim: str
+) -> List[List[str]]:
+    """Pack consecutive CJK strings into batches; each batch joined length ≤ max_chars (incl. delimiters)."""
+    if not texts:
+        return []
+    batches: List[List[str]] = []
+    cur: List[str] = []
+    cur_len = 0
+    dlen = len(delim)
+    for t in texts:
+        if len(t) > max_chars:
+            if cur:
+                batches.append(cur)
+                cur = []
+                cur_len = 0
+            batches.append([t])
+            continue
+        overhead = dlen if cur else 0
+        piece = overhead + len(t)
+        if cur and cur_len + piece > max_chars:
+            batches.append(cur)
+            cur = [t]
+            cur_len = len(t)
+        else:
+            if not cur:
+                cur = [t]
+                cur_len = len(t)
+            else:
+                cur.append(t)
+                cur_len += piece
+    if cur:
+        batches.append(cur)
+    return batches
 
 
 @dataclass
@@ -65,6 +103,59 @@ class Pipeline:
         except Exception:
             return text
 
+    def _translate_one_api(self, text: str) -> str:
+        """Single HTTP translate; `text` must be non-empty CJK when called."""
+        try:
+            return self.translator.translate(text)
+        except Exception:
+            return text
+
+    def _translate_merged_batch(self, batch: List[str], delim: str) -> List[str]:
+        """One API call for multiple segments; split back or fall back to per-string."""
+        if len(batch) == 1:
+            return [self._translate_one_api(batch[0])]
+        joined = delim.join(batch)
+        try:
+            out = self.translator.translate(joined)
+        except Exception:
+            return [self._translate_one_api(t) for t in batch]
+        parts = out.split(delim)
+        if len(parts) == len(batch):
+            return parts
+        logger.warning(
+            "Merged translation split mismatch: expected %d segment(s), got %d; "
+            "falling back to per-string translation.",
+            len(batch),
+            len(parts),
+        )
+        return [self._translate_one_api(t) for t in batch]
+
+    def translate_cjk_strings_batched(
+        self, texts: List[str], max_chars: int, delim: str
+    ) -> Tuple[List[str], int]:
+        """
+        Translate a list of CJK strings with minimal HTTP calls.
+        Returns (translations in same order, number of HTTP requests).
+        """
+        if not texts:
+            return [], 0
+        batches = _pack_cjk_texts_into_batches(texts, max_chars, delim)
+        out: List[str] = []
+        n_http = 0
+        for batch in batches:
+            n_http += 1
+            out.extend(self._translate_merged_batch(batch, delim))
+        if len(out) != len(texts):
+            logger.warning(
+                "Batch translation length mismatch: expected %d, got %d; padding with originals.",
+                len(texts),
+                len(out),
+            )
+            while len(out) < len(texts):
+                out.append(texts[len(out)])
+            out = out[: len(texts)]
+        return out, n_http
+
     def run_ocr(self, rgb: Image.Image) -> List[Tuple[Any, str, float]]:
         logger.info("OCR starting (image size %dx%d)", rgb.size[0], rgb.size[1])
         t0 = time.perf_counter()
@@ -84,24 +175,54 @@ class Pipeline:
         if not ocr_items:
             logger.info("Translation skipped (no OCR regions).")
         else:
-            logger.info("Translation starting (%d region(s) from OCR)", len(ocr_items))
-            n_tr = 0
-            translate_s = 0.0
+            entries: List[Tuple[Any, str]] = []
             for box, text, score in ocr_items:
                 if score < OCR_MIN_SCORE or not text.strip():
                     continue
-                t_one = time.perf_counter()
-                en = self.translate(text)
-                translate_s += time.perf_counter() - t_one
-                n_tr += 1
-                x1, y1, x2, y2 = box_to_xyxy(box)
-                draw_o.rectangle([x1, y1, x2, y2], fill=(15, 18, 24, 175))
-                kept.append(((x1, y1, x2, y2), en))
-            logger.info(
-                "Translation finished in %.1f ms (%d string(s); score/text filtered excluded)",
-                translate_s * 1000.0,
-                n_tr,
-            )
+                entries.append((box, text))
+
+            if not entries:
+                logger.info("Translation skipped (no regions after score filter).")
+            else:
+                logger.info("Translation starting (%d region(s) from OCR)", len(entries))
+                t_tr0 = time.perf_counter()
+                cjk_texts: List[str] = []
+                cjk_index: List[int] = []
+                for i, (_, text) in enumerate(entries):
+                    t = text.strip()
+                    if has_cjk(t):
+                        cjk_texts.append(t)
+                        cjk_index.append(i)
+                ens: List[str] = [""] * len(entries)
+                for i, (_, text) in enumerate(entries):
+                    t = text.strip()
+                    if not has_cjk(t):
+                        ens[i] = text
+                n_http = 0
+                if cjk_texts:
+                    translated, n_http = self.translate_cjk_strings_batched(
+                        cjk_texts,
+                        TRANSLATE_BATCH_MAX_CHARS,
+                        TRANSLATE_BATCH_DELIM,
+                    )
+                    for j, ti in enumerate(cjk_index):
+                        ens[ti] = translated[j]
+                translate_s = time.perf_counter() - t_tr0
+                n_tr = len(entries)
+                for i, (box, _) in enumerate(entries):
+                    en = ens[i]
+                    x1, y1, x2, y2 = box_to_xyxy(box)
+                    draw_o.rectangle([x1, y1, x2, y2], fill=(15, 18, 24, 175))
+                    kept.append(((x1, y1, x2, y2), en))
+                logger.info(
+                    "Translation finished in %.1f ms (%d string(s), %d HTTP request(s) for %d CJK string(s); "
+                    "batch max %d chars per request",
+                    translate_s * 1000.0,
+                    n_tr,
+                    n_http,
+                    len(cjk_texts),
+                    TRANSLATE_BATCH_MAX_CHARS,
+                )
 
         composed = Image.alpha_composite(base, overlay)
         draw = ImageDraw.Draw(composed, "RGBA")
