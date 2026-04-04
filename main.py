@@ -8,6 +8,7 @@ PyInstaller: prefer --windowed/--noconsole; use --collect-all pystray if tray as
 
 from __future__ import annotations
 
+import logging
 import queue
 import sys
 from typing import Optional
@@ -42,6 +43,11 @@ def _startup_messages(hotkeys: GlobalHotKeys) -> None:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     event_q: queue.Queue = queue.Queue()
     result_q: queue.Queue[Optional[Image.Image]] = queue.Queue()
 

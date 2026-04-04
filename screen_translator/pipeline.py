@@ -1,7 +1,9 @@
 """OCR, translation, overlay rendering, and background job scheduling. OCR、翻译、叠加绘制与后台任务调度。"""
 
+import logging
 import queue
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
@@ -21,6 +23,8 @@ from screen_translator.config import (
 from screen_translator.ocr_utils import box_to_xyxy, has_cjk, iter_ocr_items
 from screen_translator.ort_ep import resolve_ocr_ep_flags
 from screen_translator.render import fit_font_for_box
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -62,9 +66,14 @@ class Pipeline:
             return text
 
     def run_ocr(self, rgb: Image.Image) -> List[Tuple[Any, str, float]]:
+        logger.info("OCR starting (image size %dx%d)", rgb.size[0], rgb.size[1])
+        t0 = time.perf_counter()
         arr = np.array(rgb)
         out = self.ocr(arr)
-        return iter_ocr_items(out)
+        items = iter_ocr_items(out)
+        ms = (time.perf_counter() - t0) * 1000.0
+        logger.info("OCR finished in %.1f ms (%d region(s))", ms, len(items))
+        return items
 
     def annotate(self, rgb: Image.Image, ocr_items: Sequence[Tuple[Any, str, float]]) -> Image.Image:
         base = rgb.convert("RGBA")
@@ -72,13 +81,27 @@ class Pipeline:
         draw_o = ImageDraw.Draw(overlay, "RGBA")
 
         kept: List[Tuple[Tuple[int, int, int, int], str]] = []
-        for box, text, score in ocr_items:
-            if score < OCR_MIN_SCORE or not text.strip():
-                continue
-            en = self.translate(text)
-            x1, y1, x2, y2 = box_to_xyxy(box)
-            draw_o.rectangle([x1, y1, x2, y2], fill=(15, 18, 24, 175))
-            kept.append(((x1, y1, x2, y2), en))
+        if not ocr_items:
+            logger.info("Translation skipped (no OCR regions).")
+        else:
+            logger.info("Translation starting (%d region(s) from OCR)", len(ocr_items))
+            n_tr = 0
+            translate_s = 0.0
+            for box, text, score in ocr_items:
+                if score < OCR_MIN_SCORE or not text.strip():
+                    continue
+                t_one = time.perf_counter()
+                en = self.translate(text)
+                translate_s += time.perf_counter() - t_one
+                n_tr += 1
+                x1, y1, x2, y2 = box_to_xyxy(box)
+                draw_o.rectangle([x1, y1, x2, y2], fill=(15, 18, 24, 175))
+                kept.append(((x1, y1, x2, y2), en))
+            logger.info(
+                "Translation finished in %.1f ms (%d string(s); score/text filtered excluded)",
+                translate_s * 1000.0,
+                n_tr,
+            )
 
         composed = Image.alpha_composite(base, overlay)
         draw = ImageDraw.Draw(composed, "RGBA")
@@ -107,7 +130,7 @@ def get_pipeline() -> Pipeline:
     global _pipeline
     with _pipeline_lock:
         if _pipeline is None:
-            print("Loading OCR model (first run may download files)…", flush=True)
+            logger.info("Loading OCR model (first run may download files)…")
             _pipeline = Pipeline.create()
         return _pipeline
 
@@ -118,19 +141,27 @@ def process_and_show(
     def work() -> None:
         with _ocr_task_lock:
             try:
+                t_cap = time.perf_counter()
                 img = capture()
+                ms_cap = (time.perf_counter() - t_cap) * 1000.0
+                logger.info(
+                    "Screenshot done in %.1f ms (image %dx%d)",
+                    ms_cap,
+                    img.size[0],
+                    img.size[1],
+                )
             except Exception as e:
-                print(f"Capture failed: {e}", flush=True)
+                logger.exception("Capture failed: %s", e)
                 result_queue.put(None)
                 return
             try:
                 pipe = get_pipeline()
                 items = pipe.run_ocr(img)
                 if not items:
-                    print("No text detected.", flush=True)
+                    logger.info("No text detected after OCR.")
                 out = pipe.annotate(img, items)
             except Exception as e:
-                print(f"Processing failed: {e}", flush=True)
+                logger.exception("Processing failed: %s", e)
                 result_queue.put(None)
                 return
             result_queue.put(out)
