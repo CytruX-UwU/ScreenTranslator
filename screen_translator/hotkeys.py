@@ -1,7 +1,6 @@
 """
-Global hotkeys: on Windows prefer RegisterHotKey + message loop (more stable than
-WH_KEYBOARD_LL in console/IDE/packaged exe); else fall back to pynput.
-全局快捷键：Windows 下优先 RegisterHotKey + 消息循环；失败或非 Windows 时用 pynput。
+Global hotkeys on Windows: user32.RegisterHotKey + dedicated thread message loop (WM_HOTKEY).
+全局快捷键：仅 Windows，RegisterHotKey + 消息循环。
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ class _MSG(ctypes.Structure):
 
 
 class GlobalHotKeys:
-    """Same role as pynput.keyboard.GlobalHotKeys: start() / stop(). 接口与 pynput GlobalHotKeys 相近。"""
+    """Windows-only global hotkeys via RegisterHotKey. start() / stop()."""
 
     def __init__(
         self,
@@ -46,24 +45,11 @@ class GlobalHotKeys:
     ) -> None:
         self._mapping = mapping
         self._impl_stop: Optional[Callable[[], None]] = None
-        self._impl_kind: str = ""
 
     def start(self) -> None:
-        if sys.platform == "win32":
-            stopper = _try_start_win_register_hotkey(self._mapping)
-            if stopper is not None:
-                self._impl_stop = stopper
-                self._impl_kind = "win32"
-                return
-        self._start_pynput()
-        self._impl_kind = "pynput"
-
-    def _start_pynput(self) -> None:
-        from pynput import keyboard
-
-        hotkeys = keyboard.GlobalHotKeys(self._mapping)
-        hotkeys.start()
-        self._impl_stop = hotkeys.stop
+        if sys.platform != "win32":
+            raise RuntimeError("Screen Translator global hotkeys require Windows.")
+        self._impl_stop = _start_register_hotkey(self._mapping)
 
     def stop(self) -> None:
         if self._impl_stop:
@@ -72,19 +58,19 @@ class GlobalHotKeys:
 
     @property
     def backend(self) -> str:
-        return self._impl_kind
+        return "RegisterHotKey (user32)"
 
 
-def _try_start_win_register_hotkey(
+def _start_register_hotkey(
     mapping: dict[str, Callable[[], None]],
-) -> Optional[Callable[[], None]]:
+) -> Callable[[], None]:
     user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
 
     on_full = mapping.get(HOTKEY_FULL)
     on_region = mapping.get(HOTKEY_REGION)
     if on_full is None or on_region is None:
-        return None
+        raise RuntimeError("Hotkey mapping must include HOTKEY_FULL and HOTKEY_REGION.")
 
     done = threading.Event()
     thread_id_holder: dict[str, int] = {}
@@ -129,7 +115,10 @@ def _try_start_win_register_hotkey(
         if tid:
             user32.PostThreadMessageW(tid, _WM_QUIT, 0, 0)
         t.join(timeout=2.0)
-        return None
+        raise RuntimeError(
+            "Failed to register global hotkeys (Ctrl+Shift+1 and Ctrl+Shift+2). "
+            "Another application may already use them."
+        )
 
     def stop() -> None:
         tid = thread_id_holder.get("id")

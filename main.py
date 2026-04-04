@@ -30,7 +30,7 @@ def _startup_messages(hotkeys: GlobalHotKeys) -> None:
         "Screen Translator is running in the background (use the tray icon to exit).",
         f"  {HOTKEY_FULL} — capture the full virtual desktop and translate",
         f"  {HOTKEY_REGION} — drag a region, then translate (Esc cancels)",
-        f"Hotkey backend: {hotkeys.backend} (win32=native RegisterHotKey, pynput=fallback)",
+        f"Hotkey backend: {hotkeys.backend}",
         "Exit: close this terminal, Ctrl+C, or tray Exit.",
     ]
     try:
@@ -61,7 +61,11 @@ def main() -> None:
             HOTKEY_REGION: on_region,
         }
     )
-    hotkeys.start()
+    try:
+        hotkeys.start()
+    except RuntimeError as e:
+        print(f"Hotkeys: {e}", file=sys.stderr)
+        sys.exit(1)
     _startup_messages(hotkeys)
 
     root = tk.Tk()
