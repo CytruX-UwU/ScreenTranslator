@@ -1,4 +1,5 @@
 mss>=9.0.0
+pystray>=0.19.5
 pynput>=1.7.6
 Pillow>=10.0.0
 numpy>=1.24.0

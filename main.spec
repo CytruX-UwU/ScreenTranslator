@@ -1,12 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+_pystray_datas, _pystray_binaries, _pystray_hiddenimports = collect_all('pystray')
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
+    binaries=_pystray_binaries,
+    datas=_pystray_datas,
+    hiddenimports=_pystray_hiddenimports + collect_submodules('screen_translator'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -21,12 +24,12 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='main',
+    name='ScreenTranslator',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -40,5 +43,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='main',
+    name='ScreenTranslator',
 )
