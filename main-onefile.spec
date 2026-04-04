@@ -4,13 +4,16 @@
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 _pystray_datas, _pystray_binaries, _pystray_hiddenimports = collect_all('pystray')
+_ort_datas, _ort_binaries, _ort_hiddenimports = collect_all('onnxruntime')
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=_pystray_binaries,
-    datas=_pystray_datas,
-    hiddenimports=_pystray_hiddenimports + collect_submodules('screen_translator'),
+    binaries=_pystray_binaries + _ort_binaries,
+    datas=_pystray_datas + _ort_datas,
+    hiddenimports=_pystray_hiddenimports
+    + _ort_hiddenimports
+    + collect_submodules('screen_translator'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

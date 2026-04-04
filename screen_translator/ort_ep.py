@@ -16,7 +16,7 @@ def resolve_ocr_ep_flags(want_cuda: bool, want_dml: bool) -> Tuple[bool, bool]:
     返回将传给 RapidOCR 的 (use_cuda, use_dml)。
 
     If both backends are wanted and available, CUDA wins (DirectML disabled).
-    若两者配置为 True 且均可用，优先 CUDA，关闭 DirectML。
+    若两者均为 True 且均可用，优先 CUDA并关闭 DirectML（默认依赖为 DML，通常仅其一为 True）。
     """
     try:
         from onnxruntime import get_available_providers, get_device
@@ -40,7 +40,7 @@ def resolve_ocr_ep_flags(want_cuda: bool, want_dml: bool) -> Tuple[bool, bool]:
             print("OCR: DirectML is Windows-only; skipped.", flush=True)
         else:
             print(
-                "OCR: DirectML requested but unavailable; using CPU (or CUDA if enabled).",
+                "OCR: DirectML requested but unavailable; using CPU.",
                 flush=True,
             )
 

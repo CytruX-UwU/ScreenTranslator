@@ -17,9 +17,9 @@ OCR_DET_LIMIT_SIDE_LEN = 736  # Det limit_side_len. 检测模型输入边长限�
 OCR_INTRA_OP_NUM_THREADS = -1  # -1: use ORT default. ONNXRuntime intra-op threads / 线程数，-1 为库默认。
 OCR_INTER_OP_NUM_THREADS = -1  # ONNXRuntime inter-op threads / 并行算子间线程数。
 
-# Prefer CUDA (onnxruntime-gpu) / DirectML (onnxruntime-directml); runtime may turn off if unavailable.
-# 是否优先使用 CUDA / Windows DirectML；启动时检测 EP，不可用则自动关闭。
-OCR_USE_CUDA = True
+# Default: DirectML on Windows (onnxruntime-directml). Set CUDA True only with onnxruntime-gpu installed.
+# Windows 默认 DirectML；仅当自行安装 onnxruntime-gpu 时可改 OCR_USE_CUDA。
+OCR_USE_CUDA = False
 OCR_USE_DML = True
 
 # Merge multiple OCR lines into one Google Translate (deep_translator) request, then split by delimiter.
