@@ -8,8 +8,18 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple
 import numpy as np
 from PIL import Image, ImageDraw
 
-from screen_translator.config import OCR_MIN_SCORE
+from screen_translator.config import (
+    OCR_DET_LIMIT_SIDE_LEN,
+    OCR_INTER_OP_NUM_THREADS,
+    OCR_INTRA_OP_NUM_THREADS,
+    OCR_MAX_SIDE_LEN,
+    OCR_MIN_SCORE,
+    OCR_USE_CLS,
+    OCR_USE_CUDA,
+    OCR_USE_DML,
+)
 from screen_translator.ocr_utils import box_to_xyxy, has_cjk, iter_ocr_items
+from screen_translator.ort_ep import resolve_ocr_ep_flags
 from screen_translator.render import fit_font_for_box
 
 
@@ -23,7 +33,20 @@ class Pipeline:
         from rapidocr_onnxruntime import RapidOCR
         from deep_translator import GoogleTranslator
 
-        ocr = RapidOCR()
+        use_cuda, use_dml = resolve_ocr_ep_flags(OCR_USE_CUDA, OCR_USE_DML)
+        ocr = RapidOCR(
+            use_cls=OCR_USE_CLS,
+            max_side_len=OCR_MAX_SIDE_LEN,
+            det_limit_side_len=OCR_DET_LIMIT_SIDE_LEN,
+            intra_op_num_threads=OCR_INTRA_OP_NUM_THREADS,
+            inter_op_num_threads=OCR_INTER_OP_NUM_THREADS,
+            det_use_cuda=use_cuda,
+            cls_use_cuda=use_cuda,
+            rec_use_cuda=use_cuda,
+            det_use_dml=use_dml,
+            cls_use_dml=use_dml,
+            rec_use_dml=use_dml,
+        )
         translator = GoogleTranslator(source="zh-CN", target="en")
         return cls(ocr=ocr, translator=translator)
 
