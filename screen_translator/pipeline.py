@@ -25,7 +25,12 @@ from screen_translator.config import (
 from screen_translator.ui_result import OVERLAY_TRANSLATION_BG_RGBA
 from screen_translator.ocr_utils import box_to_xyxy, has_cjk, iter_ocr_items
 from screen_translator.ort_ep import resolve_ocr_ep_flags
-from screen_translator.render import fit_font_for_box
+from screen_translator.render import (
+    OVERLAY_MULTILINE_SPACING,
+    fit_font_for_box,
+    line_height_px,
+    wrap_text_to_width,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -227,18 +232,48 @@ class Pipeline:
 
         composed = Image.alpha_composite(base, overlay)
         draw = ImageDraw.Draw(composed, "RGBA")
+        img_w, img_h = composed.size
+        margin = 2
 
         for (x1, y1, x2, y2), en in kept:
             if not en.strip():
                 continue
             font = fit_font_for_box(draw, en, x1, y1, x2, y2)
             tw, th = x2 - x1, y2 - y1
-            bbox = draw.multiline_textbbox((0, 0), en, font=font, spacing=2)
+            text = en.strip()
+            bbox = draw.multiline_textbbox((0, 0), text, font=font, spacing=OVERLAY_MULTILINE_SPACING)
             twt, tht = bbox[2] - bbox[0], bbox[3] - bbox[1]
             tx = x1 + max(2, (tw - twt) // 2)
             ty = y1 + max(2, (th - tht) // 2)
-            draw.text((tx + 1, ty + 1), en, fill=(0, 0, 0, 220), font=font, spacing=2)
-            draw.text((tx, ty), en, fill=(240, 248, 255, 255), font=font, spacing=2)
+
+            if (
+                tx < margin
+                or ty < margin
+                or tx + twt > img_w - margin
+                or ty + tht > img_h - margin
+            ):
+                max_w = max(1, img_w - tx - margin)
+                text = wrap_text_to_width(draw, text, font, max_w)
+                bbox = draw.multiline_textbbox((0, 0), text, font=font, spacing=OVERLAY_MULTILINE_SPACING)
+                twt, tht = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                tx = x1 + max(2, (tw - twt) // 2)
+                ty = y1 + max(2, (th - tht) // 2)
+                ty = max(margin, ty - line_height_px(draw, font, spacing=OVERLAY_MULTILINE_SPACING) // 2)
+
+            draw.text(
+                (tx + 1, ty + 1),
+                text,
+                fill=(0, 0, 0, 220),
+                font=font,
+                spacing=OVERLAY_MULTILINE_SPACING,
+            )
+            draw.text(
+                (tx, ty),
+                text,
+                fill=(240, 248, 255, 255),
+                font=font,
+                spacing=OVERLAY_MULTILINE_SPACING,
+            )
 
         return composed.convert("RGB")
 
