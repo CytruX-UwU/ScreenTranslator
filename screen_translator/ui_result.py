@@ -153,6 +153,7 @@ def show_result_image(
     pil_image: Image.Image,
     *,
     ocr_regions: Optional[List[Tuple[Tuple[int, int, int, int], str]]] = None,
+    enable_ocr_hover_tooltip: bool = True,
 ) -> None:
     """
     Normal decorated window; opens fullscreen by default; double-click toggles fullscreen / windowed.
@@ -186,16 +187,32 @@ def show_result_image(
 
     source = pil_image.convert("RGB")
     sw0, sh0 = source.size
+    pre_scale = 1.0
     if max(sw0, sh0) > RESULT_IMAGE_MAX_SIDE:
-        r = RESULT_IMAGE_MAX_SIDE / max(sw0, sh0)
+        pre_scale = RESULT_IMAGE_MAX_SIDE / max(sw0, sh0)
         resample = getattr(Image, "Resampling", Image).LANCZOS
-        source = source.resize((int(sw0 * r), int(sh0 * r)), resample)
+        source = source.resize((int(sw0 * pre_scale), int(sh0 * pre_scale)), resample)
+
+    regions_for_hit: List[Tuple[Tuple[int, int, int, int], str]] = []
+    if ocr_regions:
+        for (x1, y1, x2, y2), t in ocr_regions:
+            regions_for_hit.append(
+                (
+                    (
+                        int(round(x1 * pre_scale)),
+                        int(round(y1 * pre_scale)),
+                        int(round(x2 * pre_scale)),
+                        int(round(y2 * pre_scale)),
+                    ),
+                    t,
+                )
+            )
 
     state: Dict[str, Any] = {
         "source": source,
         "photo": None,
         "after_id": None,
-        "ocr_regions": list(ocr_regions) if ocr_regions else [],
+        "ocr_regions": regions_for_hit if enable_ocr_hover_tooltip else [],
         "tip": None,
         "tip_lbl": None,
         "last_hover_idx": None,
@@ -372,8 +389,9 @@ def show_result_image(
 
     canvas.bind("<Configure>", schedule_redraw)
     canvas.bind("<Double-Button-1>", toggle_fullscreen)
-    canvas.bind("<Motion>", on_canvas_motion)
-    canvas.bind("<Leave>", on_canvas_leave)
+    if enable_ocr_hover_tooltip:
+        canvas.bind("<Motion>", on_canvas_motion)
+        canvas.bind("<Leave>", on_canvas_leave)
     hint.bind("<Double-Button-1>", toggle_fullscreen)
 
     def _on_close() -> None:

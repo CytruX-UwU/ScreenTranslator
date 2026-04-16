@@ -15,6 +15,15 @@ if TYPE_CHECKING:
 
 from screen_translator.capture import list_monitors
 
+_HOVER_HELP_TITLE = "Enlarge translation on hover"
+_HOVER_HELP_MESSAGE = (
+    "When this option is enabled, move the pointer over an OCR box in the full-screen "
+    "result window.\n\n"
+    "A small floating window then shows the full translation in a larger font. "
+    "That preview may sit on top of other overlay text so crowded regions stay readable.\n\n"
+    "Turn the option off in the tray menu if you prefer a static image with no pop-ups."
+)
+
 
 def _tray_image() -> Image.Image:
     im = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
@@ -30,6 +39,8 @@ def start_tray(
     *,
     get_selected_monitor: Callable[[], int],
     set_selected_monitor: Callable[[int], None],
+    get_hover_tooltip_enabled: Callable[[], bool],
+    set_hover_tooltip_enabled: Callable[[bool], None],
     tooltip: str = "Screen Translator",
 ) -> pystray.Icon:
     """
@@ -101,8 +112,33 @@ def start_tray(
 
     monitor_menu = pystray.Menu(*_make_monitor_items())
 
+    def on_toggle_hover_tooltip(icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        set_hover_tooltip_enabled(not bool(get_hover_tooltip_enabled()))
+        try:
+            icon.update_menu()
+        except Exception:
+            pass
+
+    def _hover_tooltip_checked(item: pystray.MenuItem) -> bool:
+        return bool(get_hover_tooltip_enabled())
+
+    def on_about_hover_tooltip(icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        def _show() -> None:
+            from tkinter import messagebox
+
+            messagebox.showinfo(_HOVER_HELP_TITLE, _HOVER_HELP_MESSAGE, parent=root)
+
+        root.after(0, _show)
+
     menu = pystray.Menu(
         pystray.MenuItem("Monitor", monitor_menu),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem(
+            "Enlarge translation on hover",
+            on_toggle_hover_tooltip,
+            checked=_hover_tooltip_checked,
+        ),
+        pystray.MenuItem("About enlarge-on-hover…", on_about_hover_tooltip),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Exit", on_quit),
     )

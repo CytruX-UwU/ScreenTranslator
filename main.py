@@ -8,6 +8,8 @@ PyInstaller: prefer --windowed/--noconsole; use --collect-all pystray if tray as
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import logging
 import queue
 import sys
@@ -120,7 +122,8 @@ def main() -> None:
         return int(settings_state["settings"].selected_monitor)
 
     def set_selected_monitor(idx: int) -> None:
-        ns = Settings(selected_monitor=int(idx))
+        s = settings_state["settings"]
+        ns = replace(s, selected_monitor=int(idx))
         settings_state["settings"] = ns
         try:
             save_settings(ns)
@@ -128,11 +131,25 @@ def main() -> None:
             # Keep runtime choice even if persistence fails.
             settings_state["settings"] = ns
 
+    def get_hover_tooltip_enabled() -> bool:
+        return bool(settings_state["settings"].hover_tooltip_enabled)
+
+    def set_hover_tooltip_enabled(enabled: bool) -> None:
+        s = settings_state["settings"]
+        ns = replace(s, hover_tooltip_enabled=bool(enabled))
+        settings_state["settings"] = ns
+        try:
+            save_settings(ns)
+        except Exception:
+            settings_state["settings"] = ns
+
     tray_icon = start_tray(
         root,
         hotkeys,
         get_selected_monitor=get_selected_monitor,
         set_selected_monitor=set_selected_monitor,
+        get_hover_tooltip_enabled=get_hover_tooltip_enabled,
+        set_hover_tooltip_enabled=set_hover_tooltip_enabled,
     )
 
     def pump() -> None:
@@ -145,7 +162,12 @@ def main() -> None:
                     open_result_pending(root)
                 else:
                     img, regions = item
-                    show_result_image(root, img, ocr_regions=regions)
+                    show_result_image(
+                        root,
+                        img,
+                        ocr_regions=regions,
+                        enable_ocr_hover_tooltip=get_hover_tooltip_enabled(),
+                    )
         except queue.Empty:
             pass
 
