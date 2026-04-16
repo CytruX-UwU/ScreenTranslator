@@ -1,14 +1,27 @@
-"""Screen capture: virtual desktop and rectangular region. 屏幕截图（虚拟桌面与矩形区域）。"""
+"""Screen capture: virtual desktop, a specific monitor, and rectangular region. 屏幕截图（虚拟桌面/指定显示器/矩形区域）。"""
 
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import mss
 from PIL import Image
 
 
-def grab_virtual_screen() -> Tuple[Image.Image, dict]:
+def list_monitors() -> List[dict]:
+    """
+    Return mss monitor descriptors.
+    Index 0 is the virtual desktop (all monitors). 1..N are physical monitors.
+    """
     with mss.mss() as sct:
-        mon = sct.monitors[0]
+        return [dict(m) for m in sct.monitors]
+
+
+def grab_virtual_screen(monitor_index: int = 0) -> Tuple[Image.Image, dict]:
+    with mss.mss() as sct:
+        monitors = sct.monitors
+        idx = int(monitor_index or 0)
+        if idx < 0 or idx >= len(monitors):
+            idx = 0
+        mon = monitors[idx]
         shot = sct.grab(mon)
         img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
         return img, dict(mon)

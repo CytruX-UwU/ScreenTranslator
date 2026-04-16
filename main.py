@@ -12,27 +12,68 @@ import logging
 import queue
 import sys
 import tkinter as tk
+import os
+import ctypes
 from PIL import Image
 
 from screen_translator.capture import grab_region, grab_virtual_screen
 from screen_translator.config import HOTKEY_FULL, HOTKEY_REGION
 from screen_translator.hotkeys import GlobalHotKeys
 from screen_translator.pipeline import RESULT_EVENT_PROCESSING, process_and_show
+from screen_translator.settings import Settings, load_settings, save_settings
 from screen_translator.tray import start_tray
 from screen_translator.ui_region import region_selector
 from screen_translator.ui_result import close_result_window, open_result_pending, show_result_image
 
 
-def _startup_messages(hotkeys: GlobalHotKeys) -> None:
+def _enable_windows_vt_mode() -> None:
+    """Best-effort enable ANSI colors on Windows consoles."""
+    if os.name != "nt":
+        return
+    try:
+        handle = ctypes.windll.kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)) == 0:
+            return
+        # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        ctypes.windll.kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+    except Exception:
+        pass
+
+
+def _green(text: str) -> str:
+    try:
+        if sys.stdout is None or not hasattr(sys.stdout, "isatty") or not sys.stdout.isatty():
+            return text
+    except Exception:
+        return text
+    _enable_windows_vt_mode()
+    return f"\x1b[32m{text}\x1b[0m"
+
+
+def _red(text: str) -> str:
+    try:
+        if sys.stdout is None or not hasattr(sys.stdout, "isatty") or not sys.stdout.isatty():
+            return text
+    except Exception:
+        return text
+    _enable_windows_vt_mode()
+    return f"\x1b[31m{text}\x1b[0m"
+
+
+def _startup_messages(hotkeys: GlobalHotKeys, *, hotkeys_enabled: bool) -> None:
     if sys.stdout is None:
         return
     lines = [
         "Screen Translator is running in the background (use the tray icon to exit).",
-        f"  {HOTKEY_FULL} — capture the full virtual desktop and translate",
+        _green("Tip: right-click the tray icon to change settings (e.g. select which monitor to capture for fullscreen)."),
+        f"  {HOTKEY_FULL} — capture the full screen and translate",
         f"  {HOTKEY_REGION} — drag a region, then translate (Esc cancels)",
         f"Hotkey backend: {hotkeys.backend}",
         "Exit: close this terminal, Ctrl+C, or tray Exit.",
     ]
+    if not hotkeys_enabled:
+        lines.insert(2, _red("  (Hotkeys disabled: failed to register; another app may be using them.)"))
     try:
         for line in lines:
             print(line, flush=True)
@@ -61,17 +102,38 @@ def main() -> None:
             HOTKEY_REGION: on_region,
         }
     )
+    hotkeys_enabled = True
     try:
         hotkeys.start()
     except RuntimeError as e:
+        hotkeys_enabled = False
         print(f"Hotkeys: {e}", file=sys.stderr)
-        sys.exit(1)
-    _startup_messages(hotkeys)
+    _startup_messages(hotkeys, hotkeys_enabled=hotkeys_enabled)
 
     root = tk.Tk()
     root.withdraw()
 
-    tray_icon = start_tray(root, hotkeys)
+    settings = load_settings()
+    settings_state: dict = {"settings": settings}
+
+    def get_selected_monitor() -> int:
+        return int(settings_state["settings"].selected_monitor)
+
+    def set_selected_monitor(idx: int) -> None:
+        ns = Settings(selected_monitor=int(idx))
+        settings_state["settings"] = ns
+        try:
+            save_settings(ns)
+        except Exception:
+            # Keep runtime choice even if persistence fails.
+            settings_state["settings"] = ns
+
+    tray_icon = start_tray(
+        root,
+        hotkeys,
+        get_selected_monitor=get_selected_monitor,
+        set_selected_monitor=set_selected_monitor,
+    )
 
     def pump() -> None:
         try:
@@ -95,7 +157,7 @@ def main() -> None:
         if kind == "full":
 
             def cap() -> Image.Image:
-                img, _ = grab_virtual_screen()
+                img, _ = grab_virtual_screen(get_selected_monitor())
                 return img
 
             process_and_show(cap, result_q)
