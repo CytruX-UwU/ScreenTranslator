@@ -57,8 +57,11 @@ def start_tray(
 
     def _mon_label(i: int, mon: dict) -> str:
         l, t, w, h = mon.get("left", 0), mon.get("top", 0), mon.get("width", 0), mon.get("height", 0)
+        name = str(mon.get("name", "") or "").strip()
         if i == 0:
             return f"All displays ({w}×{h})"
+        if name:
+            return f"Display {i} — {name} ({w}×{h} @ {l},{t})"
         return f"Display {i} ({w}×{h} @ {l},{t})"
 
     monitors: List[dict] = list_monitors()
