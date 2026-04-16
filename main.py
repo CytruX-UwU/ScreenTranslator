@@ -88,7 +88,7 @@ def main() -> None:
     )
 
     event_q: queue.Queue = queue.Queue()
-    result_q: queue.Queue = queue.Queue()  # None | RESULT_EVENT_PROCESSING | PIL.Image
+    result_q: queue.Queue = queue.Queue()  # None | RESULT_EVENT_PROCESSING | (PIL.Image, ocr_regions)
 
     def on_full() -> None:
         event_q.put("full")
@@ -144,7 +144,8 @@ def main() -> None:
                 elif item is RESULT_EVENT_PROCESSING:
                     open_result_pending(root)
                 else:
-                    show_result_image(root, item)
+                    img, regions = item
+                    show_result_image(root, img, ocr_regions=regions)
         except queue.Empty:
             pass
 

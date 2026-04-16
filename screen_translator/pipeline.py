@@ -172,7 +172,9 @@ class Pipeline:
         logger.info("OCR finished in %.1f ms (%d region(s))", ms, len(items))
         return items
 
-    def annotate(self, rgb: Image.Image, ocr_items: Sequence[Tuple[Any, str, float]]) -> Image.Image:
+    def annotate(
+        self, rgb: Image.Image, ocr_items: Sequence[Tuple[Any, str, float]]
+    ) -> Tuple[Image.Image, List[Tuple[Tuple[int, int, int, int], str]]]:
         base = rgb.convert("RGBA")
         overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
         draw_o = ImageDraw.Draw(overlay, "RGBA")
@@ -275,7 +277,10 @@ class Pipeline:
                 spacing=OVERLAY_MULTILINE_SPACING,
             )
 
-        return composed.convert("RGB")
+        hover_regions: List[Tuple[Tuple[int, int, int, int], str]] = [
+            (bbox, en.strip()) for (bbox, en) in kept if en.strip()
+        ]
+        return composed.convert("RGB"), hover_regions
 
 
 _pipeline: Optional[Pipeline] = None
@@ -322,11 +327,11 @@ def process_and_show(
                 if not items:
                     logger.info("No text detected after OCR.")
                 result_queue.put(RESULT_EVENT_PROCESSING)
-                out = pipe.annotate(img, items)
+                out, hover_regions = pipe.annotate(img, items)
             except Exception as e:
                 logger.exception("Processing failed: %s", e)
                 result_queue.put(None)
                 return
-            result_queue.put(out)
+            result_queue.put((out, hover_regions))
 
     threading.Thread(target=work, daemon=True).start()

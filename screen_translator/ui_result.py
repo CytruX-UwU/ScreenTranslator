@@ -1,6 +1,6 @@
 """Translated overlay result window: compact “processing” state, then image view. 结果窗口：处理中紧凑提示，完成后图片展示。"""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import tkinter as tk
 from PIL import Image, ImageTk
@@ -29,6 +29,12 @@ FONT_FAMILY = "Segoe UI"
 FONT_PENDING_PRIMARY = (FONT_FAMILY, 14)
 FONT_PENDING_SECONDARY = (FONT_FAMILY, 10)
 FONT_RESULT_HINT = (FONT_FAMILY, 10)
+# Hover tooltip: enlarged translation (can cover on-screen overlay text).
+HOVER_TOOLTIP_FONT = (FONT_FAMILY, 17)
+HOVER_TOOLTIP_BG = "#1a1d24"
+HOVER_TOOLTIP_FG = "#f0f8ff"
+HOVER_TOOLTIP_WRAP = 520
+HOVER_TOOLTIP_PAD = 10
 
 PENDING_WINDOW_W = 400
 PENDING_WINDOW_H = 130
@@ -142,7 +148,12 @@ def open_result_pending(master: tk.Tk) -> None:
     top.focus_force()
 
 
-def show_result_image(master: tk.Tk, pil_image: Image.Image) -> None:
+def show_result_image(
+    master: tk.Tk,
+    pil_image: Image.Image,
+    *,
+    ocr_regions: Optional[List[Tuple[Tuple[int, int, int, int], str]]] = None,
+) -> None:
     """
     Normal decorated window; opens fullscreen by default; double-click toggles fullscreen / windowed.
     Image is only scaled down to fit the view; smaller images are not upscaled.
@@ -184,6 +195,10 @@ def show_result_image(master: tk.Tk, pil_image: Image.Image) -> None:
         "source": source,
         "photo": None,
         "after_id": None,
+        "ocr_regions": list(ocr_regions) if ocr_regions else [],
+        "tip": None,
+        "tip_lbl": None,
+        "last_hover_idx": None,
     }
 
     body = tk.Frame(top, bg=COLOR_BG_RESULT)
@@ -209,6 +224,111 @@ def show_result_image(master: tk.Tk, pil_image: Image.Image) -> None:
     hint.place(relx=0.5, y=RESULT_HINT_TOP_OFFSET, anchor="n")
     hint.lift()
 
+    def _hide_hover_tip() -> None:
+        state["last_hover_idx"] = None
+        tip = state.get("tip")
+        if tip is not None:
+            try:
+                tip.withdraw()
+            except tk.TclError:
+                pass
+
+    def _ensure_hover_tip() -> tk.Toplevel:
+        tip = state.get("tip")
+        if tip is None:
+            tip = tk.Toplevel(top)
+            tip.overrideredirect(True)
+            try:
+                tip.transient(top)
+            except tk.TclError:
+                pass
+            try:
+                tip.attributes("-topmost", True)
+            except tk.TclError:
+                pass
+            tip.configure(bg=HOVER_TOOLTIP_BG)
+            fr = tk.Frame(tip, bg=HOVER_TOOLTIP_BG, highlightthickness=1, highlightbackground="#3d4450")
+            fr.pack(fill=tk.BOTH, expand=True)
+            lbl = tk.Label(
+                fr,
+                text="",
+                font=HOVER_TOOLTIP_FONT,
+                fg=HOVER_TOOLTIP_FG,
+                bg=HOVER_TOOLTIP_BG,
+                justify=tk.LEFT,
+                wraplength=HOVER_TOOLTIP_WRAP,
+            )
+            lbl.pack(padx=HOVER_TOOLTIP_PAD, pady=HOVER_TOOLTIP_PAD)
+            state["tip"] = tip
+            state["tip_lbl"] = lbl
+        return state["tip"]
+
+    def _place_hover_tip(event: tk.Event) -> None:
+        tip = state["tip"]
+        lbl = state["tip_lbl"]
+        if tip is None or lbl is None:
+            return
+        tip.update_idletasks()
+        w = tip.winfo_reqwidth()
+        h = tip.winfo_reqheight()
+        sw = top.winfo_screenwidth()
+        sh = top.winfo_screenheight()
+        xr = int(event.x_root) + 14
+        yr = int(event.y_root) + 14
+        if xr + w > sw - 8:
+            xr = int(event.x_root) - w - 14
+        if yr + h > sh - 8:
+            yr = int(event.y_root) - h - 14
+        xr = max(8, min(xr, sw - w - 8))
+        yr = max(8, min(yr, sh - h - 8))
+        tip.geometry(f"+{xr}+{yr}")
+
+    def on_canvas_motion(event: tk.Event) -> None:
+        regions: List[Tuple[Tuple[int, int, int, int], str]] = state["ocr_regions"]
+        if not regions:
+            return
+        canvas.update_idletasks()
+        cw = max(canvas.winfo_width(), 2)
+        ch = max(canvas.winfo_height(), 2)
+        iw, ih = state["source"].size
+        if iw < 1 or ih < 1:
+            return
+        scale = min(1.0, cw / iw, ch / ih)
+        nw = max(1, int(round(iw * scale)))
+        nh = max(1, int(round(ih * scale)))
+        ox = (cw - nw) // 2
+        oy = (ch - nh) // 2
+        cx, cy = int(event.x), int(event.y)
+        if cx < ox or cy < oy or cx > ox + nw or cy > oy + nh:
+            _hide_hover_tip()
+            return
+        ix = (cx - ox) / scale
+        iy = (cy - oy) / scale
+        hit_idx: Optional[int] = None
+        hit_txt = ""
+        # Later regions are drawn on top in the pipeline; prefer topmost hit.
+        for i in range(len(regions) - 1, -1, -1):
+            (x1, y1, x2, y2), txt = regions[i]
+            if x1 <= ix <= x2 and y1 <= iy <= y2:
+                hit_idx = i
+                hit_txt = txt
+                break
+        if hit_idx is None:
+            _hide_hover_tip()
+            return
+        tip = _ensure_hover_tip()
+        lbl = state["tip_lbl"]
+        assert lbl is not None
+        if state["last_hover_idx"] != hit_idx:
+            lbl.configure(text=hit_txt)
+            state["last_hover_idx"] = hit_idx
+        tip.deiconify()
+        tip.lift()
+        _place_hover_tip(event)
+
+    def on_canvas_leave(_event: tk.Event) -> None:
+        _hide_hover_tip()
+
     def redraw() -> None:
         canvas.update_idletasks()
         cw = max(canvas.winfo_width(), 2)
@@ -225,6 +345,7 @@ def show_result_image(master: tk.Tk, pil_image: Image.Image) -> None:
         state["photo"] = ImageTk.PhotoImage(disp)
         canvas.delete("all")
         canvas.create_image(cw // 2, ch // 2, image=state["photo"], anchor=tk.CENTER)
+        _hide_hover_tip()
 
     def schedule_redraw(_event: Any = None) -> None:
         aid = state["after_id"]
@@ -251,9 +372,20 @@ def show_result_image(master: tk.Tk, pil_image: Image.Image) -> None:
 
     canvas.bind("<Configure>", schedule_redraw)
     canvas.bind("<Double-Button-1>", toggle_fullscreen)
+    canvas.bind("<Motion>", on_canvas_motion)
+    canvas.bind("<Leave>", on_canvas_leave)
     hint.bind("<Double-Button-1>", toggle_fullscreen)
 
     def _on_close() -> None:
+        _hide_hover_tip()
+        t = state.get("tip")
+        if t is not None:
+            try:
+                t.destroy()
+            except tk.TclError:
+                pass
+            state["tip"] = None
+            state["tip_lbl"] = None
         try:
             top.attributes("-fullscreen", False)
         except tk.TclError:
