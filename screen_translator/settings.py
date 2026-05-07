@@ -6,6 +6,7 @@ Currently stores:
   - 0 means "all displays" (mss virtual screen)
   - 1..N means a specific monitor index in mss.monitors
 - hover_tooltip_enabled: bool — enlarged translation popup when hovering OCR boxes in the result window
+- target_language: str — translation target language code (deep_translator / GoogleTranslator)
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from pathlib import Path
 class Settings:
     selected_monitor: int = 0
     hover_tooltip_enabled: bool = True
+    target_language: str = "en"
 
 
 def _settings_path() -> Path:
@@ -52,7 +54,11 @@ def load_settings() -> Settings:
         hover = hover.strip().lower() in ("1", "true", "yes", "on")
     else:
         hover = bool(hover)
-    return Settings(selected_monitor=sel, hover_tooltip_enabled=hover)
+    lang = raw.get("target_language", "en")
+    if not isinstance(lang, str):
+        lang = "en"
+    lang = lang.strip() or "en"
+    return Settings(selected_monitor=sel, hover_tooltip_enabled=hover, target_language=lang)
 
 
 def save_settings(s: Settings) -> None:

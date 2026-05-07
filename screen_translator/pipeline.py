@@ -75,9 +75,10 @@ def _pack_cjk_texts_into_batches(
 class Pipeline:
     ocr: Any
     translator: Any
+    target_language: str
 
     @classmethod
-    def create(cls) -> "Pipeline":
+    def create(cls, *, target_language: str) -> "Pipeline":
         from rapidocr_onnxruntime import RapidOCR
         from deep_translator import GoogleTranslator
 
@@ -95,8 +96,17 @@ class Pipeline:
             cls_use_dml=use_dml,
             rec_use_dml=use_dml,
         )
-        translator = GoogleTranslator(source="zh-CN", target="en")
-        return cls(ocr=ocr, translator=translator)
+        translator = GoogleTranslator(source="zh-CN", target=target_language)
+        return cls(ocr=ocr, translator=translator, target_language=target_language)
+
+    def ensure_target_language(self, target_language: str) -> None:
+        lang = (target_language or "").strip() or "en"
+        if lang == self.target_language:
+            return
+        from deep_translator import GoogleTranslator
+
+        self.translator = GoogleTranslator(source="zh-CN", target=lang)
+        self.target_language = lang
 
     def translate(self, text: str) -> str:
         t = text.strip()
@@ -297,13 +307,15 @@ def get_pipeline() -> Pipeline:
     with _pipeline_lock:
         if _pipeline is None:
             logger.info("Loading OCR model (first run may download files)…")
-            _pipeline = Pipeline.create()
+            _pipeline = Pipeline.create(target_language="en")
         return _pipeline
 
 
 def process_and_show(
     capture: Callable[[], Image.Image],
     result_queue: "queue.Queue[Optional[object]]",
+    *,
+    get_target_language: Callable[[], str],
 ) -> None:
     def work() -> None:
         with _ocr_task_lock:
@@ -323,6 +335,7 @@ def process_and_show(
                 return
             try:
                 pipe = get_pipeline()
+                pipe.ensure_target_language(get_target_language())
                 items = pipe.run_ocr(img)
                 if not items:
                     logger.info("No text detected after OCR.")

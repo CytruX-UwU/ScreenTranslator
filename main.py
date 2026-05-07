@@ -111,11 +111,25 @@ def main() -> None:
         except Exception:
             settings_state["settings"] = ns
 
+    def get_target_language() -> str:
+        return str(settings_state["settings"].target_language)
+
+    def set_target_language(lang: str) -> None:
+        s = settings_state["settings"]
+        ns = replace(s, target_language=str(lang))
+        settings_state["settings"] = ns
+        try:
+            save_settings(ns)
+        except Exception:
+            settings_state["settings"] = ns
+
     tray_icon = start_tray(
         root,
         hotkeys,
         get_selected_monitor=get_selected_monitor,
         set_selected_monitor=set_selected_monitor,
+        get_target_language=get_target_language,
+        set_target_language=set_target_language,
         get_hover_tooltip_enabled=get_hover_tooltip_enabled,
         set_hover_tooltip_enabled=set_hover_tooltip_enabled,
     )
@@ -151,7 +165,7 @@ def main() -> None:
                 img, _ = grab_virtual_screen(get_selected_monitor())
                 return img
 
-            process_and_show(cap, result_q)
+            process_and_show(cap, result_q, get_target_language=get_target_language)
         elif kind == "region":
             bbox = region_selector(root)
             if bbox is not None:
@@ -160,7 +174,7 @@ def main() -> None:
                 def cap2() -> Image.Image:
                     return grab_region(l, t, w, h)
 
-                process_and_show(cap2, result_q)
+                process_and_show(cap2, result_q, get_target_language=get_target_language)
 
         root.after(40, pump)
 

@@ -39,6 +39,8 @@ def start_tray(
     *,
     get_selected_monitor: Callable[[], int],
     set_selected_monitor: Callable[[int], None],
+    get_target_language: Callable[[], str],
+    set_target_language: Callable[[str], None],
     get_hover_tooltip_enabled: Callable[[], bool],
     set_hover_tooltip_enabled: Callable[[bool], None],
     tooltip: str = "Screen Translator",
@@ -87,6 +89,36 @@ def start_tray(
     # Coerce once at tray startup so the menu always has one checked item.
     _coerce_selected_monitor()
 
+    languages: List[tuple[str, str]] = [
+        ("en", "English"),
+        ("fr", "Français"),
+        ("ja", "日本語"),
+        ("ko", "한국어"),
+        ("ru", "Русский"),
+        ("pl", "Polski"),
+        ("es", "Español"),
+        ("pt", "Português"),
+        ("de", "Deutsch"),
+        ("tr", "Türkçe"),
+        ("it", "Italiano"),
+    ]
+    language_codes = {code for code, _ in languages}
+
+    def _coerce_target_language() -> str:
+        try:
+            lang = str(get_target_language() or "").strip()
+        except Exception:
+            lang = "en"
+        if lang not in language_codes:
+            lang = "en"
+            try:
+                set_target_language("en")
+            except Exception:
+                pass
+        return lang
+
+    _coerce_target_language()
+
     def _make_monitor_items() -> Sequence[pystray.MenuItem]:
         items: List[pystray.MenuItem] = []
 
@@ -115,6 +147,32 @@ def start_tray(
 
     monitor_menu = pystray.Menu(*_make_monitor_items())
 
+    def _make_language_items() -> Sequence[pystray.MenuItem]:
+        items: List[pystray.MenuItem] = []
+        for code, name in languages:
+            label = f"{name} ({code})"
+
+            def _make_action(lang: str) -> Callable[[pystray.Icon, pystray.MenuItem], None]:
+                def _action(icon: pystray.Icon, item: pystray.MenuItem) -> None:
+                    set_target_language(lang)
+                    try:
+                        icon.update_menu()
+                    except Exception:
+                        pass
+
+                return _action
+
+            def _make_checked(lang: str) -> Callable[[pystray.MenuItem], bool]:
+                def _checked(item: pystray.MenuItem) -> bool:
+                    return _coerce_target_language() == lang
+
+                return _checked
+
+            items.append(pystray.MenuItem(label, _make_action(code), checked=_make_checked(code), radio=True))
+        return items
+
+    language_menu = pystray.Menu(*_make_language_items())
+
     def on_toggle_hover_tooltip(icon: pystray.Icon, item: pystray.MenuItem) -> None:
         set_hover_tooltip_enabled(not bool(get_hover_tooltip_enabled()))
         try:
@@ -135,6 +193,7 @@ def start_tray(
 
     menu = pystray.Menu(
         pystray.MenuItem("Monitor", monitor_menu),
+        pystray.MenuItem("Language", language_menu),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(
             "Enlarge translation on hover",
