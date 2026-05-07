@@ -44,12 +44,14 @@ def _read_version_from_pyproject() -> Optional[str]:
 
 
 def local_version_string() -> str:
-    """Prefer installed distribution metadata; fall back to repo pyproject.toml."""
+    """Prefer repo ``pyproject.toml`` when present (dev checkout); else installed metadata."""
+    pv = _read_version_from_pyproject()
+    if pv:
+        return pv
     try:
         return importlib.metadata.version("screen-translator")
     except importlib.metadata.PackageNotFoundError:
-        v = _read_version_from_pyproject()
-        return v if v else "0.0.0"
+        return "0.0.0"
 
 
 @dataclass(frozen=True)
@@ -107,7 +109,7 @@ def schedule_startup_release_notice(root) -> None:
         )
 
         def on_main_thread() -> None:
-            logger.info("%s", line)
+            # logger.info("%s", line)
             if stdout_is_tty():
                 try:
                     print(console_blue(line), flush=True)

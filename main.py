@@ -16,6 +16,7 @@ import sys
 import tkinter as tk
 from PIL import Image
 
+from screen_translator.author_message import schedule_console_author_message
 from screen_translator.capture import grab_region, grab_virtual_screen
 from screen_translator.console_fmt import green as console_green
 from screen_translator.console_fmt import red as console_red
@@ -77,6 +78,7 @@ def main() -> None:
         hotkeys_enabled = False
         print(f"Hotkeys: {e}", file=sys.stderr)
     _startup_messages(hotkeys, hotkeys_enabled=hotkeys_enabled)
+    schedule_console_author_message()
 
     root = tk.Tk()
     root.withdraw()

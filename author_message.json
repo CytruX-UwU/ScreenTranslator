@@ -1,0 +1,33 @@
+{
+  "_documentation": [
+    "This file is downloaded at app startup (GitHub raw). Only root key \"message\" is used for console output.",
+    "Any other root keys (like this array) are ignored by the program — safe for notes / reminders.",
+    "\"message\" entries require \"text\" (string). \"format\" is optional: prefer a JSON array of strings, e.g. [\"green\"] or [\"hide\"] for debugging (hidden blocks are not printed).",
+    "\"text\" line breaks: use \\n escapes inside the string value. \\n\\n gives a blank line; printing uses end=\"\" so newlines come from the string.",
+    "Format tags are matched case-insensitively. \"hide\" skips the segment. Color tags red / green / blue: at most one applies, precedence red > green > blue. Legacy one-string format is split on whitespace.",
+    "——",
+    "本文件在程序启动时从 GitHub raw 拉取。只有根对象的 \"message\" 数组会用于控制台输出。",
+    "其余根字段（例如本说明）程序会忽略，可随意写备注、约定或草稿。",
+    "\"message\" 中每项：必须有 \"text\"（字符串）；\"format\" 推荐为字符串数组，例如 [\"green\"] 或 [\"hide\"]（调试时不输出该段）。",
+    "\"text\" 换行使用 JSON 中的 \\n；程序 print(end=\"\")，由字符串内换行控制折行。",
+    "格式标签不区分大小写。含 hide 则整段不打印。颜色标签 red / green / blue 至多生效一个，优先级 红 > 绿 > 蓝。旧写法 format 为单个字符串时仍支持，会按空白拆成多个标签。"
+  ],
+  "message": [
+    {
+      "format": [],
+      "text": "Welcome! Thanks for using Screen Translator.\n"
+    },
+    {
+      "format": ["hide", "green"],
+      "text": "Welcome! Thanks for using Screen Translator.\n"
+    },
+    {
+      "format": ["hide", "blue"],
+      "text": "Welcome! Thanks for using Screen Translator.\n"
+    },
+    {
+      "format": ["hide", "red", "green", "blue"],
+      "text": "Welcome! Thanks for using Screen Translator.\n"
+    }
+  ]
+}
