@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Screen region OCR and Chinese-to-English translation. 屏幕区域 OCR 与中译英。"
 requires-python = ">=3.10"
 dependencies = [
+    "packaging>=24.0",
     "mss>=9.0.0",
     "pystray>=0.19.5",
     "Pillow>=10.0.0",
