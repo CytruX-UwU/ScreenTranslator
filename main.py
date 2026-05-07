@@ -16,7 +16,6 @@ import sys
 import tkinter as tk
 from PIL import Image
 
-from screen_translator.author_message import schedule_console_author_message
 from screen_translator.capture import grab_region, grab_virtual_screen
 from screen_translator.console_fmt import green as console_green
 from screen_translator.console_fmt import red as console_red
@@ -24,7 +23,7 @@ from screen_translator.config import HOTKEY_FULL, HOTKEY_REGION
 from screen_translator.hotkeys import GlobalHotKeys
 from screen_translator.pipeline import RESULT_EVENT_PROCESSING, process_and_show
 from screen_translator.settings import Settings, load_settings, save_settings
-from screen_translator.release_check import schedule_startup_release_notice
+from screen_translator.remote_startup import schedule_startup_remote
 from screen_translator.tray import start_tray
 from screen_translator.ui_region import region_selector
 from screen_translator.ui_result import close_result_window, open_result_pending, show_result_image
@@ -78,12 +77,11 @@ def main() -> None:
         hotkeys_enabled = False
         print(f"Hotkeys: {e}", file=sys.stderr)
     _startup_messages(hotkeys, hotkeys_enabled=hotkeys_enabled)
-    schedule_console_author_message()
 
     root = tk.Tk()
     root.withdraw()
 
-    schedule_startup_release_notice(root)
+    schedule_startup_remote(root)
 
     settings = load_settings()
     settings_state: dict = {"settings": settings}

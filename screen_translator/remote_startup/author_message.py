@@ -26,7 +26,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import threading
 import urllib.error
 import urllib.request
 
@@ -155,21 +154,16 @@ def fetch_author_message_rows(*, timeout_sec: float = 4.0) -> list[tuple[list[st
     return _parse_body_to_rows(body)
 
 
-def schedule_console_author_message() -> None:
-    """Fetch author message in a daemon thread; print styled segments when done (TTY only)."""
+def render_author_message_console(rows: list[tuple[list[str], str]]) -> None:
+    """Print author segments when stdout is a TTY (run on the Tk main thread for ordering)."""
+    from screen_translator.console_fmt import stdout_is_tty
 
-    def worker() -> None:
-        from screen_translator.console_fmt import stdout_is_tty
-
-        rows = fetch_author_message_rows()
-        if not rows or not stdout_is_tty():
-            return
-        try:
-            for tags, segment in rows:
-                if _tags_include_hide(tags):
-                    continue
-                print(apply_format_tags(tags, segment), end="", flush=True)
-        except OSError:
-            pass
-
-    threading.Thread(target=worker, daemon=True).start()
+    if not rows or not stdout_is_tty():
+        return
+    try:
+        for tags, segment in rows:
+            if _tags_include_hide(tags):
+                continue
+            print(apply_format_tags(tags, segment), end="", flush=True)
+    except OSError:
+        pass

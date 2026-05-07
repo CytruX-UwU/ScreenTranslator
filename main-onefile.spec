@@ -1,7 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 # One-file bundle (单文件一体包): output dist/ScreenTranslator.exe
 
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+_SPEC_DIR = Path(SPECPATH)
+_PYPROJECT_DATA = [str((_SPEC_DIR / "pyproject.toml").resolve()), "."]
 
 _pystray_datas, _pystray_binaries, _pystray_hiddenimports = collect_all('pystray')
 _ort_datas, _ort_binaries, _ort_hiddenimports = collect_all('onnxruntime')
@@ -11,7 +16,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=_pystray_binaries + _ort_binaries + _rapid_binaries,
-    datas=_pystray_datas + _ort_datas + _rapid_datas,
+    datas=_pystray_datas + _ort_datas + _rapid_datas + [_PYPROJECT_DATA],
     hiddenimports=_pystray_hiddenimports
     + _ort_hiddenimports
     + _rapid_hiddenimports
@@ -40,7 +45,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

@@ -6,12 +6,15 @@ import importlib.metadata
 import json
 import logging
 import re
-import threading
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    import tkinter as tk
 
 from packaging.version import InvalidVersion, Version
 
@@ -33,10 +36,29 @@ def _normalize_tag_version(tag_name: str) -> str:
     return (m.group(1) if m else t).strip()
 
 
+def _pyproject_path() -> Optional[Path]:
+    """
+    Development: ``<repo>/pyproject.toml`` (this file lives under ``screen_translator/remote_startup/``).
+
+    PyInstaller: bundled copy under ``sys._MEIPASS``, or ``pyproject.toml`` next to the executable.
+    """
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            bundled = Path(meipass) / "pyproject.toml"
+            if bundled.is_file():
+                return bundled
+        beside_exe = Path(sys.executable).resolve().parent / "pyproject.toml"
+        if beside_exe.is_file():
+            return beside_exe
+        return None
+    # remote_startup/release_check.py -> parent.parent.parent == repo root
+    return Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
+
+
 def _read_version_from_pyproject() -> Optional[str]:
-    root = Path(__file__).resolve().parent.parent
-    path = root / "pyproject.toml"
-    if not path.is_file():
+    path = _pyproject_path()
+    if path is None or not path.is_file():
         return None
     text = path.read_text(encoding="utf-8")
     m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
@@ -91,40 +113,33 @@ def remote_is_newer(local: str, remote: str) -> bool:
         return False
 
 
-def schedule_startup_release_notice(root) -> None:
+def render_release_update_notice(root: "tk.Tk", *, local: str, latest: Optional[LatestRelease]) -> None:
     """
-    Fetch latest release in a daemon thread; if newer than local, notify on the Tk thread.
-    Console: one line to stdout; windowed / no TTY: tkinter message box.
+    If GitHub latest is newer than ``local``, print to console (TTY) or show a message box.
+    Must run on the Tk main thread (e.g. via ``root.after``).
     """
+    if latest is None or not remote_is_newer(local, latest.version):
+        return
 
-    def worker() -> None:
-        local = local_version_string()
-        latest = fetch_latest_release()
-        if latest is None or not remote_is_newer(local, latest.version):
-            return
+    line = (
+        f"Update available: v{latest.version} (current v{local}). "
+        f"See {latest.html_url}"
+    )
+    # logger.info("%s", line)
 
-        line = (
-            f"Update available: v{latest.version} (current v{local}). "
-            f"See {latest.html_url}"
-        )
+    if stdout_is_tty():
+        try:
+            print(console_blue(line), flush=True)
+        except OSError:
+            pass
+        return
 
-        def on_main_thread() -> None:
-            # logger.info("%s", line)
-            if stdout_is_tty():
-                try:
-                    print(console_blue(line), flush=True)
-                except OSError:
-                    pass
-            else:
-                import tkinter.messagebox as mb
+    import tkinter.messagebox as mb
 
-                mb.showinfo(
-                    "Screen Translator — update available",
-                    f"A newer release is available (v{latest.version}).\n"
-                    f"You are on v{local}.\n\n"
-                    f"Open the releases page to download:\n{latest.html_url}",
-                )
-
-        root.after(0, on_main_thread)
-
-    threading.Thread(target=worker, daemon=True).start()
+    mb.showinfo(
+        "Screen Translator — update available",
+        f"A newer release is available (v{latest.version}).\n"
+        f"You are on v{local}.\n\n"
+        f"Open the releases page to download:\n{latest.html_url}",
+        parent=root,
+    )

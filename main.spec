@@ -2,7 +2,13 @@
 # One-folder bundle (非一体包), console=True — output dist/ScreenTranslator/ScreenTranslator.exe
 # 便于查看 print / logging / 异常栈；调试时优先用这个 spec。
 
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+_SPEC_DIR = Path(SPECPATH)
+# Version string for remote_startup.release_check.local_version_string(); lands next to other bundled datas (_MEIPASS / COLLECT).
+_PYPROJECT_DATA = [str((_SPEC_DIR / "pyproject.toml").resolve()), "."]
 
 _pystray_datas, _pystray_binaries, _pystray_hiddenimports = collect_all("pystray")
 _ort_datas, _ort_binaries, _ort_hiddenimports = collect_all("onnxruntime")
@@ -13,7 +19,7 @@ a = Analysis(
     ["main.py"],
     pathex=[],
     binaries=_pystray_binaries + _ort_binaries + _rapid_binaries,
-    datas=_pystray_datas + _ort_datas + _rapid_datas,
+    datas=_pystray_datas + _ort_datas + _rapid_datas + [_PYPROJECT_DATA],
     hiddenimports=_pystray_hiddenimports
     + _ort_hiddenimports
     + _rapid_hiddenimports
